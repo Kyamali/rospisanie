@@ -1,0 +1,880 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Расписание занятий</title>
+
+<!-- Tailwind CSS (CDN) -->
+<script src="https://cdn.tailwindcss.com"></script>
+
+<!-- Lucide Icons (CDN) -->
+<script src="https://unpkg.com/lucide@latest"></script>
+
+<!-- Шрифты: Fraunces (заголовки), Inter (интерфейс), JetBrains Mono (время) -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+
+<script>
+  // Настройка палитры и шрифтов Tailwind под дизайн "школьного планера"
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          paper: '#ECEEE7',
+          paperDark: '#DDE1D8',
+          ink: '#1E2A22',
+          inkSoft: '#55605A',
+          line: '#C9CFC3',
+          accent: '#2F6F4E',
+          accentDark: '#24573D',
+          warm: '#E2572B',
+        },
+        fontFamily: {
+          display: ['Fraunces', 'serif'],
+          sans: ['Inter', 'sans-serif'],
+          mono: ['"JetBrains Mono"', 'monospace'],
+        },
+      },
+    },
+  };
+</script>
+
+<style>
+  /* Базовый фон в виде тончайшей "тетрадной" сетки, чтобы отсылать к бумажному планеру */
+  body {
+    background-color: #ECEEE7;
+    background-image:
+      linear-gradient(#DDE1D8 1px, transparent 1px),
+      linear-gradient(90deg, #DDE1D8 1px, transparent 1px);
+    background-size: 28px 28px;
+    background-position: -1px -1px;
+  }
+
+  /* Вкладка дня недели похожа на выступающий "язычок" планера */
+  .day-tab {
+    clip-path: polygon(12% 0, 88% 0, 100% 100%, 0% 100%);
+  }
+  .day-tab[data-active="true"] {
+    clip-path: none;
+    border-radius: 10px 10px 0 0;
+  }
+
+  /* Цветная "лента" в углу карточки урока — фирменный элемент дизайна */
+  .washi-tape {
+    position: absolute;
+    top: -8px;
+    left: 18px;
+    width: 56px;
+    height: 20px;
+    transform: rotate(-3deg);
+    opacity: 0.92;
+    border-radius: 2px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.15);
+  }
+
+  /* Плавное появление карточек */
+  @keyframes cardIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .card-anim { animation: cardIn 0.25s ease-out; }
+
+  /* Скрыть скроллбар у ленты вкладок, оставив прокрутку */
+  .tabs-scroll::-webkit-scrollbar { height: 4px; }
+  .tabs-scroll::-webkit-scrollbar-thumb { background: #C9CFC3; border-radius: 4px; }
+
+  /* Уважение к reduced-motion */
+  @media (prefers-reduced-motion: reduce) {
+    .card-anim { animation: none; }
+  }
+
+  /* Кастомный чекбокс-свотч цвета */
+  .swatch { transition: transform .12s ease, box-shadow .12s ease; }
+  .swatch[data-selected="true"] { transform: scale(1.12); box-shadow: 0 0 0 2px white, 0 0 0 4px var(--sw-color); }
+
+  .icon-btn[data-selected="true"] { background-color: #2F6F4E; color: white; }
+
+  /* Видимый фокус для доступности */
+  button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible, [tabindex]:focus-visible {
+    outline: 2px solid #2F6F4E;
+    outline-offset: 2px;
+  }
+</style>
+</head>
+
+<body class="min-h-screen text-ink font-sans pb-24">
+
+  <!-- ============== ШАПКА ============== -->
+  <header class="max-w-3xl mx-auto px-5 pt-8 pb-4 flex items-start justify-between gap-4">
+    <div>
+      <h1 class="font-display text-4xl font-semibold tracking-tight text-ink">Расписание</h1>
+      <p class="text-inkSoft text-sm mt-1">Занятия хранятся прямо в этом браузере — ничего не пропадёт при перезагрузке</p>
+    </div>
+    <button id="openAddModalBtn"
+      class="shrink-0 inline-flex items-center gap-2 bg-accent hover:bg-accentDark text-white font-medium px-4 py-2.5 rounded-full shadow-sm transition-colors">
+      <i data-lucide="plus" class="w-4 h-4"></i>
+      <span class="hidden sm:inline">Добавить урок</span>
+    </button>
+  </header>
+
+  <!-- ============== ВКЛАДКИ ДНЕЙ НЕДЕЛИ ============== -->
+  <nav class="max-w-3xl mx-auto px-5">
+    <div id="dayTabs" class="tabs-scroll flex gap-1 overflow-x-auto pb-0"></div>
+    <div class="h-px bg-line -mt-px"></div>
+  </nav>
+
+  <!-- ============== СПИСОК ЗАНЯТИЙ ============== -->
+  <main class="max-w-3xl mx-auto px-5 pt-6">
+    <div id="lessonsContainer" class="flex flex-col gap-5"></div>
+  </main>
+
+  <!-- ============== МОДАЛЬНОЕ ОКНО: ДОБАВИТЬ / РЕДАКТИРОВАТЬ УРОК ============== -->
+  <div id="modalOverlay" class="fixed inset-0 bg-ink/40 backdrop-blur-[2px] hidden items-center justify-center z-50 p-4">
+    <div class="bg-paper w-full max-w-lg rounded-2xl shadow-xl border border-line max-h-[90vh] overflow-y-auto">
+      <form id="lessonForm" class="p-6 flex flex-col gap-5">
+
+        <div class="flex items-center justify-between">
+          <h2 id="modalTitle" class="font-display text-2xl font-semibold">Новый урок</h2>
+          <button type="button" id="closeModalBtn" class="text-inkSoft hover:text-ink p-1 rounded-full">
+            <i data-lucide="x" class="w-5 h-5"></i>
+          </button>
+        </div>
+
+        <!-- Преподаватель -->
+        <div>
+          <label for="teacherInput" class="block text-sm font-medium text-inkSoft mb-1.5">Преподаватель</label>
+          <input id="teacherInput" name="teacher" type="text" required maxlength="60" placeholder="Например, Анна Петровна"
+            class="w-full bg-white border border-line rounded-xl px-3.5 py-2.5 text-ink placeholder:text-inkSoft/60" />
+        </div>
+
+        <!-- День недели + время -->
+        <div class="grid grid-cols-3 gap-3">
+          <div class="col-span-1">
+            <label for="dayInput" class="block text-sm font-medium text-inkSoft mb-1.5">День</label>
+            <select id="dayInput" name="day" class="w-full bg-white border border-line rounded-xl px-2 py-2.5 text-ink"></select>
+          </div>
+          <div>
+            <label for="startTimeInput" class="block text-sm font-medium text-inkSoft mb-1.5">Начало</label>
+            <input id="startTimeInput" name="startTime" type="time" required class="w-full bg-white border border-line rounded-xl px-2 py-2.5 font-mono text-ink" />
+          </div>
+          <div>
+            <label for="endTimeInput" class="block text-sm font-medium text-inkSoft mb-1.5">Конец</label>
+            <input id="endTimeInput" name="endTime" type="time" required class="w-full bg-white border border-line rounded-xl px-2 py-2.5 font-mono text-ink" />
+          </div>
+        </div>
+
+        <!-- Комментарий -->
+        <div>
+          <label for="commentInput" class="block text-sm font-medium text-inkSoft mb-1.5">Комментарий / заметка</label>
+          <textarea id="commentInput" name="comment" rows="2" maxlength="200" placeholder="Кабинет 204, взять учебник..."
+            class="w-full bg-white border border-line rounded-xl px-3.5 py-2.5 text-ink placeholder:text-inkSoft/60 resize-none"></textarea>
+        </div>
+
+        <!-- Цвет карточки -->
+        <div>
+          <label class="block text-sm font-medium text-inkSoft mb-2">Цвет карточки</label>
+          <div id="colorSwatches" class="flex flex-wrap gap-2.5"></div>
+        </div>
+
+        <!-- Иконка / изображение -->
+        <div>
+          <label class="block text-sm font-medium text-inkSoft mb-2">Аватар урока</label>
+
+          <div class="flex bg-paperDark rounded-full p-1 w-fit mb-3 text-sm font-medium">
+            <button type="button" data-mode="icon" class="avatar-mode-btn px-3.5 py-1.5 rounded-full transition-colors">Готовая иконка</button>
+            <button type="button" data-mode="image" class="avatar-mode-btn px-3.5 py-1.5 rounded-full transition-colors">Своё фото</button>
+          </div>
+
+          <div id="iconPickerBlock">
+            <div id="iconGrid" class="grid grid-cols-8 gap-2"></div>
+          </div>
+
+          <div id="imagePickerBlock" class="hidden">
+            <div class="flex items-center gap-4">
+              <div id="imagePreviewWrap" class="w-16 h-16 rounded-full bg-paperDark border border-line flex items-center justify-center overflow-hidden shrink-0">
+                <img id="imagePreview" class="w-full h-full object-cover hidden" alt="Предпросмотр аватара" />
+                <i data-lucide="image" class="w-6 h-6 text-inkSoft" id="imagePlaceholderIcon"></i>
+              </div>
+              <div>
+                <input type="file" id="imageFileInput" accept="image/*" class="hidden" />
+                <button type="button" id="chooseImageBtn" class="text-sm font-medium bg-white border border-line px-3.5 py-2 rounded-lg hover:bg-paperDark transition-colors">Выбрать файл</button>
+                <p class="text-xs text-inkSoft mt-1.5">JPG, PNG или GIF, до 1.5 МБ</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Скрытые служебные поля -->
+        <input type="hidden" id="lessonIdInput" />
+        <input type="hidden" id="colorValueInput" />
+        <input type="hidden" id="iconTypeInput" value="icon" />
+        <input type="hidden" id="iconValueInput" />
+
+        <div class="flex gap-3 pt-2">
+          <button type="submit" class="flex-1 bg-accent hover:bg-accentDark text-white font-medium py-2.5 rounded-xl transition-colors">Сохранить</button>
+          <button type="button" id="cancelModalBtn" class="px-5 py-2.5 rounded-xl border border-line text-inkSoft hover:bg-paperDark transition-colors">Отмена</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ============== УВЕДОМЛЕНИЯ (TOAST) ============== -->
+  <div id="toast" class="fixed bottom-5 left-1/2 -translate-x-1/2 bg-ink text-white text-sm px-4 py-2.5 rounded-full shadow-lg opacity-0 pointer-events-none transition-opacity duration-300 z-[60] flex items-center gap-2"></div>
+
+<script>
+/* =========================================================================
+   РАСПИСАНИЕ ЗАНЯТИЙ — вся логика приложения
+   Хранение:
+     - Текстовые данные уроков -> localStorage (ключ SCHEDULE_STORAGE_KEY)
+     - Загруженные пользователем изображения -> IndexedDB (база SCHEDULE_DB_NAME)
+   ========================================================================= */
+
+// ---------- КОНСТАНТЫ ----------
+const SCHEDULE_STORAGE_KEY = 'scheduleApp.lessons.v1';
+const DB_NAME = 'ScheduleAppDB';
+const DB_STORE = 'images';
+const MAX_IMAGE_BYTES = 1.5 * 1024 * 1024; // 1.5 МБ — лимит на загружаемую картинку
+
+const DAYS = [
+  { key: 'mon', short: 'Пн', full: 'Понедельник' },
+  { key: 'tue', short: 'Вт', full: 'Вторник' },
+  { key: 'wed', short: 'Ср', full: 'Среда' },
+  { key: 'thu', short: 'Чт', full: 'Четверг' },
+  { key: 'fri', short: 'Пт', full: 'Пятница' },
+  { key: 'sat', short: 'Сб', full: 'Суббота' },
+  { key: 'sun', short: 'Вс', full: 'Воскресенье' },
+];
+
+// Пресеты цветов карточек — фирменные "маркерные" оттенки
+const COLOR_PRESETS = [
+  '#2F6F4E', // хвойный зелёный
+  '#E2572B', // коралловый
+  '#D98E04', // янтарный
+  '#6B4FA0', // фиолетовый
+  '#2C7DA0', // небесный
+  '#C4436B', // розовый
+  '#7A8B3F', // оливковый
+  '#46546B', // грифельный
+];
+
+// Набор иконок Lucide, уместных для школьных предметов
+const ICON_PRESETS = [
+  'book-open', 'calculator', 'flask-conical', 'globe', 'music', 'palette',
+  'code-2', 'dumbbell', 'languages', 'atom', 'pencil-ruler', 'graduation-cap',
+  'microscope', 'brain', 'compass', 'piano',
+];
+
+// ---------- СОСТОЯНИЕ ПРИЛОЖЕНИЯ ----------
+let lessons = [];             // массив всех уроков
+let currentDay = DAYS[0].key; // текущий выбранный день
+let editingLessonId = null;   // id урока, который редактируется (или null для нового)
+let selectedColor = COLOR_PRESETS[0];
+let selectedIconType = 'icon'; // 'icon' | 'image'
+let selectedIconValue = ICON_PRESETS[0];
+let pendingImageDataUrl = null; // base64-строка выбранной, но ещё не сохранённой картинки
+let toastTimeout = null;
+
+// =========================================================================
+// IndexedDB: хранение изображений (аватарок уроков)
+// =========================================================================
+function openImageDB() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, 1);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(DB_STORE)) {
+        db.createObjectStore(DB_STORE); // ключ — id картинки, значение — base64 dataURL
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function saveImageToDB(id, dataUrl) {
+  const db = await openImageDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(DB_STORE, 'readwrite');
+    tx.objectStore(DB_STORE).put(dataUrl, id);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function getImageFromDB(id) {
+  const db = await openImageDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(DB_STORE, 'readonly');
+    const req = tx.objectStore(DB_STORE).get(id);
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function deleteImageFromDB(id) {
+  try {
+    const db = await openImageDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction(DB_STORE, 'readwrite');
+      tx.objectStore(DB_STORE).delete(id);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve(); // не критично, если не удалилось
+    });
+  } catch (e) {
+    console.warn('Не удалось удалить изображение из IndexedDB', e);
+  }
+}
+
+// Кэш уже загруженных из IndexedDB картинок, чтобы не дёргать базу на каждый рендер
+const imageCache = new Map();
+async function getImageCached(id) {
+  if (imageCache.has(id)) return imageCache.get(id);
+  try {
+    const dataUrl = await getImageFromDB(id);
+    imageCache.set(id, dataUrl);
+    return dataUrl;
+  } catch (e) {
+    console.warn('Ошибка чтения картинки из IndexedDB', e);
+    return null;
+  }
+}
+
+// =========================================================================
+// localStorage: хранение текстовых данных уроков
+// =========================================================================
+function loadLessons() {
+  try {
+    const raw = localStorage.getItem(SCHEDULE_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (e) {
+    // Если данные повреждены — не роняем приложение, начинаем с пустого расписания
+    console.error('Не удалось прочитать расписание из localStorage', e);
+    showToast('Не удалось загрузить сохранённые данные, начинаем с чистого листа', 'error');
+    return [];
+  }
+}
+
+function saveLessons() {
+  try {
+    localStorage.setItem(SCHEDULE_STORAGE_KEY, JSON.stringify(lessons));
+  } catch (e) {
+    console.error('Не удалось сохранить расписание', e);
+    showToast('Не удалось сохранить изменения. Возможно, закончилось место в браузере', 'error');
+  }
+}
+
+// =========================================================================
+// УВЕДОМЛЕНИЯ (toast)
+// =========================================================================
+function showToast(message, type = 'info') {
+  const toast = document.getElementById('toast');
+  clearTimeout(toastTimeout);
+  toast.innerHTML = '';
+
+  const icon = document.createElement('i');
+  icon.setAttribute('data-lucide', type === 'error' ? 'alert-triangle' : 'check-circle-2');
+  icon.className = 'w-4 h-4 shrink-0';
+  const text = document.createElement('span');
+  text.textContent = message;
+
+  toast.appendChild(icon);
+  toast.appendChild(text);
+  toast.classList.remove('opacity-0');
+  toast.classList.add('opacity-100');
+  lucide.createIcons();
+
+  toastTimeout = setTimeout(() => {
+    toast.classList.remove('opacity-100');
+    toast.classList.add('opacity-0');
+  }, 3200);
+}
+
+// =========================================================================
+// РЕНДЕР: вкладки дней недели
+// =========================================================================
+function renderDayTabs() {
+  const container = document.getElementById('dayTabs');
+  container.innerHTML = '';
+
+  DAYS.forEach((day) => {
+    const count = lessons.filter((l) => l.day === day.key).length;
+    const isActive = day.key === currentDay;
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.dataset.active = String(isActive);
+    btn.className = `day-tab shrink-0 px-4 sm:px-5 pt-2.5 pb-3 text-sm font-medium transition-colors relative ${
+      isActive
+        ? 'bg-white text-ink'
+        : 'bg-paperDark/70 text-inkSoft hover:bg-paperDark'
+    }`;
+    btn.innerHTML = `
+      <span class="hidden sm:inline">${day.full}</span>
+      <span class="sm:hidden">${day.short}</span>
+      ${count > 0 ? `<span class="ml-1.5 inline-flex items-center justify-center text-[10px] font-mono font-semibold w-4 h-4 rounded-full ${isActive ? 'bg-accent text-white' : 'bg-white text-inkSoft'}">${count}</span>` : ''}
+    `;
+    btn.addEventListener('click', () => {
+      currentDay = day.key;
+      renderDayTabs();
+      renderLessons();
+    });
+    container.appendChild(btn);
+  });
+}
+
+// =========================================================================
+// РЕНДЕР: список уроков выбранного дня
+// =========================================================================
+async function renderLessons() {
+  const container = document.getElementById('lessonsContainer');
+  container.innerHTML = '';
+
+  const dayLessons = lessons
+    .filter((l) => l.day === currentDay)
+    .sort((a, b) => a.startTime.localeCompare(b.startTime)); // сортировка по времени начала
+
+  if (dayLessons.length === 0) {
+    container.innerHTML = `
+      <div class="flex flex-col items-center justify-center text-center py-16 px-6 bg-white/60 border border-dashed border-line rounded-2xl">
+        <i data-lucide="calendar-x" class="w-9 h-9 text-inkSoft mb-3"></i>
+        <p class="text-inkSoft font-medium">На этот день занятий пока нет</p>
+        <button type="button" class="addFromEmptyBtn mt-4 text-sm font-medium bg-accent text-white px-4 py-2 rounded-full hover:bg-accentDark transition-colors">
+          Добавить урок
+        </button>
+      </div>
+    `;
+    container.querySelector('.addFromEmptyBtn').addEventListener('click', () => openModal());
+    lucide.createIcons();
+    return;
+  }
+
+  for (const lesson of dayLessons) {
+    container.appendChild(await buildLessonCard(lesson));
+  }
+  lucide.createIcons();
+}
+
+async function buildLessonCard(lesson) {
+  const card = document.createElement('div');
+  card.className = 'card-anim relative bg-white rounded-2xl border border-line pt-5 pb-4 px-5 shadow-sm';
+
+  // Цветная лента-сигнатура в углу карточки
+  const tape = document.createElement('div');
+  tape.className = 'washi-tape';
+  tape.style.backgroundColor = lesson.color;
+  card.appendChild(tape);
+
+  // Аватар: либо lucide-иконка на цветном фоне, либо загруженное изображение
+  const avatarWrap = document.createElement('div');
+  avatarWrap.className = 'w-12 h-12 rounded-full flex items-center justify-center shrink-0 overflow-hidden border border-line';
+
+  if (lesson.iconType === 'image' && lesson.iconValue) {
+    const dataUrl = await getImageCached(lesson.iconValue);
+    if (dataUrl) {
+      const img = document.createElement('img');
+      img.src = dataUrl;
+      img.alt = `Аватар урока: ${lesson.teacher}`;
+      img.className = 'w-full h-full object-cover';
+      avatarWrap.appendChild(img);
+    } else {
+      avatarWrap.style.backgroundColor = lesson.color + '22';
+      avatarWrap.innerHTML = `<i data-lucide="image-off" class="w-5 h-5" style="color:${lesson.color}"></i>`;
+    }
+  } else {
+    avatarWrap.style.backgroundColor = lesson.color + '22';
+    avatarWrap.innerHTML = `<i data-lucide="${lesson.iconValue || 'book-open'}" class="w-5 h-5" style="color:${lesson.color}"></i>`;
+  }
+
+  const header = document.createElement('div');
+  header.className = 'flex items-start justify-between gap-3';
+  header.innerHTML = `
+    <div class="flex items-center gap-3 min-w-0">
+      ${avatarWrap.outerHTML}
+      <div class="min-w-0">
+        <p class="font-semibold text-ink truncate">${escapeHtml(lesson.teacher)}</p>
+        <p class="font-mono text-sm text-inkSoft">${lesson.startTime}–${lesson.endTime}</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-1 shrink-0">
+      <button type="button" class="editBtn p-2 rounded-full hover:bg-paperDark text-inkSoft hover:text-ink transition-colors" aria-label="Редактировать урок">
+        <i data-lucide="pencil" class="w-4 h-4"></i>
+      </button>
+      <button type="button" class="deleteBtn p-2 rounded-full hover:bg-red-50 text-inkSoft hover:text-red-600 transition-colors" aria-label="Удалить урок">
+        <i data-lucide="trash-2" class="w-4 h-4"></i>
+      </button>
+    </div>
+  `;
+  card.appendChild(header);
+
+  if (lesson.comment && lesson.comment.trim()) {
+    const comment = document.createElement('p');
+    comment.className = 'text-sm text-inkSoft mt-3 pl-[60px] whitespace-pre-wrap break-words';
+    comment.textContent = lesson.comment;
+    card.appendChild(comment);
+  }
+
+  card.querySelector('.editBtn').addEventListener('click', () => openModal(lesson));
+  card.querySelector('.deleteBtn').addEventListener('click', () => handleDeleteLesson(lesson.id));
+
+  return card;
+}
+
+// Простая защита от XSS при выводе имени преподавателя
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// =========================================================================
+// УДАЛЕНИЕ УРОКА
+// =========================================================================
+async function handleDeleteLesson(id) {
+  const lesson = lessons.find((l) => l.id === id);
+  if (!lesson) return;
+
+  const ok = confirm(`Удалить урок «${lesson.teacher}» (${lesson.startTime}–${lesson.endTime})?`);
+  if (!ok) return;
+
+  // Если у урока была загруженная картинка — чистим её из IndexedDB, чтобы не копить мусор
+  if (lesson.iconType === 'image' && lesson.iconValue) {
+    await deleteImageFromDB(lesson.iconValue);
+    imageCache.delete(lesson.iconValue);
+  }
+
+  lessons = lessons.filter((l) => l.id !== id);
+  saveLessons();
+  renderDayTabs();
+  renderLessons();
+  showToast('Урок удалён');
+}
+
+// =========================================================================
+// МОДАЛЬНОЕ ОКНО: открытие / закрытие / заполнение палитр
+// =========================================================================
+function populateDaySelect() {
+  const select = document.getElementById('dayInput');
+  select.innerHTML = DAYS.map((d) => `<option value="${d.key}">${d.full}</option>`).join('');
+}
+
+function populateColorSwatches() {
+  const wrap = document.getElementById('colorSwatches');
+  wrap.innerHTML = '';
+  COLOR_PRESETS.forEach((color) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'swatch w-8 h-8 rounded-full';
+    btn.style.backgroundColor = color;
+    btn.style.setProperty('--sw-color', color);
+    btn.dataset.color = color;
+    btn.setAttribute('aria-label', `Выбрать цвет ${color}`);
+    btn.addEventListener('click', () => {
+      selectedColor = color;
+      document.getElementById('colorValueInput').value = color;
+      refreshColorSwatchSelection();
+    });
+    wrap.appendChild(btn);
+  });
+}
+
+function refreshColorSwatchSelection() {
+  document.querySelectorAll('#colorSwatches .swatch').forEach((el) => {
+    el.dataset.selected = String(el.dataset.color === selectedColor);
+  });
+}
+
+function populateIconGrid() {
+  const grid = document.getElementById('iconGrid');
+  grid.innerHTML = '';
+  ICON_PRESETS.forEach((iconName) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'icon-btn w-9 h-9 rounded-lg border border-line flex items-center justify-center text-ink hover:bg-paperDark transition-colors';
+    btn.dataset.icon = iconName;
+    btn.innerHTML = `<i data-lucide="${iconName}" class="w-4 h-4"></i>`;
+    btn.addEventListener('click', () => {
+      selectedIconType = 'icon';
+      selectedIconValue = iconName;
+      pendingImageDataUrl = null;
+      document.getElementById('iconTypeInput').value = 'icon';
+      document.getElementById('iconValueInput').value = iconName;
+      refreshIconGridSelection();
+    });
+    grid.appendChild(btn);
+  });
+  lucide.createIcons();
+}
+
+function refreshIconGridSelection() {
+  document.querySelectorAll('#iconGrid .icon-btn').forEach((el) => {
+    el.dataset.selected = String(el.dataset.icon === selectedIconValue && selectedIconType === 'icon');
+  });
+}
+
+function switchAvatarMode(mode) {
+  selectedIconType = mode;
+  document.getElementById('iconTypeInput').value = mode;
+
+  document.querySelectorAll('.avatar-mode-btn').forEach((btn) => {
+    const active = btn.dataset.mode === mode;
+    btn.classList.toggle('bg-white', active);
+    btn.classList.toggle('shadow-sm', active);
+    btn.classList.toggle('text-ink', active);
+    btn.classList.toggle('text-inkSoft', !active);
+  });
+
+  document.getElementById('iconPickerBlock').classList.toggle('hidden', mode !== 'icon');
+  document.getElementById('imagePickerBlock').classList.toggle('hidden', mode !== 'image');
+}
+
+function openModal(lesson = null) {
+  const form = document.getElementById('lessonForm');
+  form.reset();
+  pendingImageDataUrl = null;
+
+  if (lesson) {
+    // Режим редактирования — заполняем форму текущими значениями
+    editingLessonId = lesson.id;
+    document.getElementById('modalTitle').textContent = 'Редактировать урок';
+    document.getElementById('lessonIdInput').value = lesson.id;
+    document.getElementById('teacherInput').value = lesson.teacher;
+    document.getElementById('dayInput').value = lesson.day;
+    document.getElementById('startTimeInput').value = lesson.startTime;
+    document.getElementById('endTimeInput').value = lesson.endTime;
+    document.getElementById('commentInput').value = lesson.comment || '';
+
+    selectedColor = lesson.color;
+    selectedIconType = lesson.iconType;
+    selectedIconValue = lesson.iconValue;
+
+    document.getElementById('colorValueInput').value = lesson.color;
+    document.getElementById('iconTypeInput').value = lesson.iconType;
+    document.getElementById('iconValueInput').value = lesson.iconValue;
+
+    if (lesson.iconType === 'image') {
+      switchAvatarMode('image');
+      getImageCached(lesson.iconValue).then((dataUrl) => {
+        if (dataUrl) setImagePreview(dataUrl);
+      });
+    } else {
+      switchAvatarMode('icon');
+    }
+  } else {
+    // Режим создания — значения по умолчанию
+    editingLessonId = null;
+    document.getElementById('modalTitle').textContent = 'Новый урок';
+    document.getElementById('lessonIdInput').value = '';
+    document.getElementById('dayInput').value = currentDay;
+
+    selectedColor = COLOR_PRESETS[0];
+    selectedIconType = 'icon';
+    selectedIconValue = ICON_PRESETS[0];
+
+    document.getElementById('colorValueInput').value = selectedColor;
+    document.getElementById('iconTypeInput').value = 'icon';
+    document.getElementById('iconValueInput').value = selectedIconValue;
+
+    switchAvatarMode('icon');
+    setImagePreview(null);
+  }
+
+  refreshColorSwatchSelection();
+  refreshIconGridSelection();
+
+  const overlay = document.getElementById('modalOverlay');
+  overlay.classList.remove('hidden');
+  overlay.classList.add('flex');
+  document.getElementById('teacherInput').focus();
+}
+
+function closeModal() {
+  const overlay = document.getElementById('modalOverlay');
+  overlay.classList.add('hidden');
+  overlay.classList.remove('flex');
+  editingLessonId = null;
+  pendingImageDataUrl = null;
+}
+
+function setImagePreview(dataUrl) {
+  const img = document.getElementById('imagePreview');
+  const placeholder = document.getElementById('imagePlaceholderIcon');
+  if (dataUrl) {
+    img.src = dataUrl;
+    img.classList.remove('hidden');
+    placeholder.classList.add('hidden');
+  } else {
+    img.src = '';
+    img.classList.add('hidden');
+    placeholder.classList.remove('hidden');
+  }
+}
+
+// =========================================================================
+// ЗАГРУЗКА ИЗОБРАЖЕНИЯ ПОЛЬЗОВАТЕЛЯ
+// =========================================================================
+function handleImageFileSelected(file) {
+  if (!file) return;
+
+  if (!file.type.startsWith('image/')) {
+    showToast('Можно загружать только файлы изображений', 'error');
+    return;
+  }
+
+  if (file.size > MAX_IMAGE_BYTES) {
+    showToast('Файл слишком большой. Максимум — 1.5 МБ', 'error');
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = () => {
+    pendingImageDataUrl = reader.result; // base64 dataURL
+    selectedIconType = 'image';
+    document.getElementById('iconTypeInput').value = 'image';
+    setImagePreview(pendingImageDataUrl);
+  };
+  reader.onerror = () => {
+    showToast('Не удалось прочитать файл изображения', 'error');
+  };
+  reader.readAsDataURL(file);
+}
+
+// =========================================================================
+// СОХРАНЕНИЕ ФОРМЫ (создание / редактирование урока)
+// =========================================================================
+async function handleFormSubmit(e) {
+  e.preventDefault();
+
+  const teacher = document.getElementById('teacherInput').value.trim();
+  const day = document.getElementById('dayInput').value;
+  const startTime = document.getElementById('startTimeInput').value;
+  const endTime = document.getElementById('endTimeInput').value;
+  const comment = document.getElementById('commentInput').value.trim();
+
+  // ---- Валидация ----
+  if (!teacher) {
+    showToast('Укажите преподавателя', 'error');
+    return;
+  }
+  if (!startTime || !endTime) {
+    showToast('Укажите время начала и окончания', 'error');
+    return;
+  }
+  if (endTime <= startTime) {
+    showToast('Время окончания должно быть позже времени начала', 'error');
+    return;
+  }
+
+  // ---- Определяем аватар урока ----
+  let iconType = selectedIconType;
+  let iconValue = selectedIconValue;
+
+  if (iconType === 'image') {
+    if (pendingImageDataUrl) {
+      // Новая картинка — сохраняем в IndexedDB под новым id
+      iconValue = 'img_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+      try {
+        await saveImageToDB(iconValue, pendingImageDataUrl);
+        imageCache.set(iconValue, pendingImageDataUrl);
+      } catch (err) {
+        console.error(err);
+        showToast('Не удалось сохранить изображение', 'error');
+        return;
+      }
+    } else if (editingLessonId) {
+      // Редактирование без смены картинки — оставляем прежний id
+      const existing = lessons.find((l) => l.id === editingLessonId);
+      iconValue = existing && existing.iconType === 'image' ? existing.iconValue : null;
+      if (!iconValue) {
+        showToast('Загрузите изображение или выберите готовую иконку', 'error');
+        return;
+      }
+    } else {
+      showToast('Загрузите изображение или выберите готовую иконку', 'error');
+      return;
+    }
+  }
+
+  const lessonData = {
+    id: editingLessonId || 'lesson_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+    teacher,
+    day,
+    startTime,
+    endTime,
+    comment,
+    color: selectedColor,
+    iconType,
+    iconValue,
+  };
+
+  if (editingLessonId) {
+    // Если сменили тип аватара с картинки на иконку — чистим старую картинку
+    const old = lessons.find((l) => l.id === editingLessonId);
+    if (old && old.iconType === 'image' && (iconType !== 'image' || old.iconValue !== iconValue)) {
+      await deleteImageFromDB(old.iconValue);
+      imageCache.delete(old.iconValue);
+    }
+    lessons = lessons.map((l) => (l.id === editingLessonId ? lessonData : l));
+    showToast('Изменения сохранены');
+  } else {
+    lessons.push(lessonData);
+    showToast('Урок добавлен');
+  }
+
+  saveLessons();
+  currentDay = day; // переключаемся на день добавленного/изменённого урока
+  closeModal();
+  renderDayTabs();
+  renderLessons();
+}
+
+// =========================================================================
+// ИНИЦИАЛИЗАЦИЯ
+// =========================================================================
+function attachEventListeners() {
+  document.getElementById('openAddModalBtn').addEventListener('click', () => openModal());
+  document.getElementById('closeModalBtn').addEventListener('click', closeModal);
+  document.getElementById('cancelModalBtn').addEventListener('click', closeModal);
+
+  // Закрытие модалки по клику на подложку
+  document.getElementById('modalOverlay').addEventListener('click', (e) => {
+    if (e.target.id === 'modalOverlay') closeModal();
+  });
+  // Закрытие по Esc
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !document.getElementById('modalOverlay').classList.contains('hidden')) {
+      closeModal();
+    }
+  });
+
+  document.getElementById('lessonForm').addEventListener('submit', handleFormSubmit);
+
+  document.querySelectorAll('.avatar-mode-btn').forEach((btn) => {
+    btn.addEventListener('click', () => switchAvatarMode(btn.dataset.mode));
+  });
+
+  document.getElementById('chooseImageBtn').addEventListener('click', () => {
+    document.getElementById('imageFileInput').click();
+  });
+  document.getElementById('imageFileInput').addEventListener('change', (e) => {
+    handleImageFileSelected(e.target.files[0]);
+  });
+}
+
+function init() {
+  lessons = loadLessons();
+  populateDaySelect();
+  populateColorSwatches();
+  populateIconGrid();
+  attachEventListeners();
+  renderDayTabs();
+  renderLessons();
+  lucide.createIcons();
+}
+
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
