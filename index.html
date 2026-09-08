@@ -8,17 +8,17 @@
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="default" />
 <title>Расписание занятий</title>
- 
+
 <!-- Tailwind CSS (CDN) -->
 <script src="https://cdn.tailwindcss.com"></script>
- 
+
 <!-- Lucide Icons (CDN) -->
 <script src="https://unpkg.com/lucide@latest"></script>
- 
+
 <!-- Шрифты: Fraunces (заголовки), Inter (интерфейс), JetBrains Mono (время) -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
- 
+
 <script>
   // Настройка палитры и шрифтов Tailwind под дизайн "школьного планера"
   tailwind.config = {
@@ -43,7 +43,7 @@
     },
   };
 </script>
- 
+
 <style>
   /* Базовый фон в виде тончайшей "тетрадной" сетки, чтобы отсылать к бумажному планеру */
   body {
@@ -54,7 +54,7 @@
     background-size: 28px 28px;
     background-position: -1px -1px;
   }
- 
+
   /* Вкладка дня недели похожа на выступающий "язычок" планера */
   .day-tab {
     clip-path: polygon(12% 0, 88% 0, 100% 100%, 0% 100%);
@@ -63,78 +63,85 @@
     clip-path: none;
     border-radius: 10px 10px 0 0;
   }
- 
+
   /* Плавное появление карточек */
   @keyframes cardIn {
     from { opacity: 0; transform: translateY(6px); }
     to { opacity: 1; transform: translateY(0); }
   }
   .card-anim { animation: cardIn 0.25s ease-out; }
- 
+
   /* Скрыть скроллбар у ленты вкладок, оставив прокрутку */
   .tabs-scroll::-webkit-scrollbar { height: 4px; }
   .tabs-scroll::-webkit-scrollbar-thumb { background: #C9CFC3; border-radius: 4px; }
- 
+
   /* Уважение к reduced-motion */
   @media (prefers-reduced-motion: reduce) {
     .card-anim { animation: none; }
   }
- 
+
   /* Кастомный чекбокс-свотч цвета */
   .swatch { transition: transform .12s ease, box-shadow .12s ease; }
   .swatch[data-selected="true"] { transform: scale(1.12); box-shadow: 0 0 0 2px white, 0 0 0 4px var(--sw-color); }
- 
+
   .icon-btn[data-selected="true"] { background-color: #2F6F4E; color: white; }
- 
+
   /* Видимый фокус для доступности */
   button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible, [tabindex]:focus-visible {
     outline: 2px solid #2F6F4E;
     outline-offset: 2px;
   }
- 
+
   /* === Оптимизация под смартфоны === */
- 
+
   /* Убираем задержку/подсветку при тапе и двойной тап-зум на интерактивных элементах */
   button, a, input, select, textarea {
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
   }
- 
+
   /* iOS зумит страницу при фокусе на поле с font-size < 16px — держим не меньше 16px */
   input, select, textarea {
     font-size: 16px;
   }
- 
+
   /* Отступы под "чёлку"/домашнюю полосу на iPhone */
   .safe-top { padding-top: env(safe-area-inset-top); }
   .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
- 
+
   /* Плавающая кнопка добавления урока — держится над safe-area снизу */
   #mobileAddFab { bottom: calc(1.25rem + env(safe-area-inset-bottom)); }
- 
-  /* На мобильных модалка ведёт себя как bottom sheet: выезжает снизу */
+
+  /* На мобильных модалки ведут себя как bottom sheet: выезжают снизу */
   @media (max-width: 639px) {
-    #modalOverlay { align-items: flex-end; padding: 0; }
-    #modalOverlay .modal-panel { border-radius: 20px 20px 0 0; max-height: 92vh; }
+    #modalOverlay, #bulkModalOverlay { align-items: flex-end; padding: 0; }
+    #modalOverlay .modal-panel, #bulkModalOverlay .modal-panel { border-radius: 20px 20px 0 0; max-height: 92vh; }
   }
 </style>
 </head>
- 
+
 <body class="min-h-screen text-ink font-sans pb-24 safe-bottom">
- 
+
   <!-- ============== ШАПКА ============== -->
   <header class="max-w-3xl mx-auto px-4 sm:px-5 pt-6 sm:pt-8 pb-4 flex items-start justify-between gap-3 safe-top">
     <div class="min-w-0">
       <h1 class="font-display text-3xl sm:text-4xl font-semibold tracking-tight text-ink">Расписание</h1>
       <p class="text-inkSoft text-xs sm:text-sm mt-1">Занятия хранятся прямо в этом браузере — ничего не пропадёт при перезагрузке</p>
     </div>
-    <button id="openAddModalBtn"
-      class="hidden sm:inline-flex shrink-0 items-center gap-2 bg-accent hover:bg-accentDark text-white font-medium px-4 py-2.5 rounded-full shadow-sm transition-colors">
-      <i data-lucide="plus" class="w-4 h-4"></i>
-      <span>Добавить урок</span>
-    </button>
+    <div class="hidden sm:flex shrink-0 items-center gap-2">
+      <button id="openBulkModalBtn"
+        class="inline-flex items-center gap-2 bg-white border border-line hover:bg-paperDark text-ink font-medium px-4 py-2.5 rounded-full shadow-sm transition-colors">
+        <i data-lucide="list-plus" class="w-4 h-4"></i>
+        <span>Несколько уроков</span>
+      </button>
+      <button id="openAddModalBtn"
+        class="inline-flex items-center gap-2 bg-accent hover:bg-accentDark text-white font-medium px-4 py-2.5 rounded-full shadow-sm transition-colors">
+        <i data-lucide="plus" class="w-4 h-4"></i>
+        <span>Добавить урок</span>
+      </button>
+    </div>
   </header>
- 
+
   <!-- ============== ВКЛАДКИ ДНЕЙ НЕДЕЛИ (прилипают к верху при прокрутке) ============== -->
   <nav class="sticky top-0 z-30 bg-paper/95 backdrop-blur-sm safe-top">
     <div class="max-w-3xl mx-auto px-4 sm:px-5">
@@ -142,52 +149,59 @@
       <div class="h-px bg-line -mt-px"></div>
     </div>
   </nav>
- 
+
   <!-- ============== СПИСОК ЗАНЯТИЙ ============== -->
   <main class="max-w-3xl mx-auto px-4 sm:px-5 pt-6">
     <!-- Время начала первого урока для текущего дня — от него считается всё расписание -->
-    <div class="flex flex-wrap items-center gap-2.5 mb-5 bg-white/70 border border-line rounded-xl px-4 py-2.5 w-fit max-w-full">
-      <i data-lucide="alarm-clock" class="w-4 h-4 text-inkSoft shrink-0"></i>
-      <label for="dayStartInput" class="text-sm text-inkSoft whitespace-nowrap">1-й урок начинается в</label>
-      <input type="time" id="dayStartInput" class="font-mono text-sm border border-line rounded-lg px-2 py-1 bg-white" />
+    <div class="flex flex-wrap items-center gap-2.5 mb-5">
+      <div class="flex flex-wrap items-center gap-2.5 bg-white/70 border border-line rounded-xl px-4 py-2.5 w-fit max-w-full">
+        <i data-lucide="alarm-clock" class="w-4 h-4 text-inkSoft shrink-0"></i>
+        <label for="dayStartInput" class="text-sm text-inkSoft whitespace-nowrap">1-й урок начинается в</label>
+        <input type="time" id="dayStartInput" class="font-mono text-sm border border-line rounded-lg px-2 py-1 bg-white" />
+      </div>
+      <button id="openBulkModalBtnMobile" type="button"
+        class="sm:hidden inline-flex items-center gap-1.5 text-sm font-medium text-accent hover:text-accentDark px-3 py-2 rounded-lg hover:bg-white/70 transition-colors">
+        <i data-lucide="list-plus" class="w-4 h-4"></i>
+        <span>Несколько уроков</span>
+      </button>
     </div>
     <div id="lessonsContainer" class="flex flex-col gap-3"></div>
   </main>
- 
+
   <!-- Плавающая кнопка добавления урока — только на смартфонах, всегда под рукой у большого пальца -->
   <button id="mobileAddFab"
     class="sm:hidden fixed right-5 z-40 w-14 h-14 rounded-full bg-accent active:bg-accentDark text-white shadow-lg flex items-center justify-center transition-colors"
     aria-label="Добавить урок">
     <i data-lucide="plus" class="w-6 h-6"></i>
   </button>
- 
+
   <!-- ============== МОДАЛЬНОЕ ОКНО: ДОБАВИТЬ / РЕДАКТИРОВАТЬ УРОК ============== -->
   <div id="modalOverlay" class="fixed inset-0 bg-ink/40 backdrop-blur-[2px] hidden items-center justify-center z-50 p-4">
     <div class="modal-panel bg-paper w-full max-w-lg rounded-2xl shadow-xl border border-line max-h-[90vh] overflow-y-auto overscroll-contain safe-bottom">
       <!-- Ручка bottom sheet — видна только на смартфонах -->
       <div class="sm:hidden mx-auto mt-2.5 mb-1 h-1.5 w-10 rounded-full bg-line"></div>
       <form id="lessonForm" class="p-5 sm:p-6 flex flex-col gap-5">
- 
+
         <div class="flex items-center justify-between">
           <h2 id="modalTitle" class="font-display text-2xl font-semibold">Новый урок</h2>
           <button type="button" id="closeModalBtn" class="text-inkSoft hover:text-ink p-1 rounded-full">
             <i data-lucide="x" class="w-5 h-5"></i>
           </button>
         </div>
- 
+
         <!-- Предмет -->
         <div>
           <label for="subjectInput" class="block text-sm font-medium text-inkSoft mb-1.5">Предмет</label>
           <select id="subjectInput" name="subject" required class="w-full bg-white border border-line rounded-xl px-3.5 py-2.5 text-ink"></select>
         </div>
- 
+
         <!-- Преподаватель -->
         <div>
           <label for="teacherInput" class="block text-sm font-medium text-inkSoft mb-1.5">Преподаватель <span class="font-normal text-inkSoft/70">(необязательно)</span></label>
           <input id="teacherInput" name="teacher" type="text" maxlength="60" placeholder="Например, Анна Петровна"
             class="w-full bg-white border border-line rounded-xl px-3.5 py-2.5 text-ink placeholder:text-inkSoft/60" />
         </div>
- 
+
         <!-- День недели + перемена после урока -->
         <div class="grid grid-cols-2 gap-3">
           <div>
@@ -200,33 +214,33 @@
           </div>
         </div>
         <p class="text-xs text-inkSoft -mt-3">Урок длится 45 минут (классный час — 30 минут). Время начала и конца считается автоматически по расписанию дня.</p>
- 
+
         <!-- Комментарий -->
         <div>
           <label for="commentInput" class="block text-sm font-medium text-inkSoft mb-1.5">Комментарий / заметка</label>
           <textarea id="commentInput" name="comment" rows="2" maxlength="200" placeholder="Кабинет 204, взять учебник..."
             class="w-full bg-white border border-line rounded-xl px-3.5 py-2.5 text-ink placeholder:text-inkSoft/60 resize-none"></textarea>
         </div>
- 
+
         <!-- Цвет карточки -->
         <div>
           <label class="block text-sm font-medium text-inkSoft mb-2">Цвет карточки</label>
           <div id="colorSwatches" class="flex flex-wrap gap-2.5"></div>
         </div>
- 
+
         <!-- Иконка / изображение -->
         <div>
           <label class="block text-sm font-medium text-inkSoft mb-2">Аватар урока</label>
- 
+
           <div class="flex bg-paperDark rounded-full p-1 w-fit mb-3 text-sm font-medium">
             <button type="button" data-mode="icon" class="avatar-mode-btn px-3.5 py-1.5 rounded-full transition-colors">Готовая иконка</button>
             <button type="button" data-mode="image" class="avatar-mode-btn px-3.5 py-1.5 rounded-full transition-colors">Своё фото</button>
           </div>
- 
+
           <div id="iconPickerBlock">
             <div id="iconGrid" class="grid grid-cols-6 sm:grid-cols-8 gap-2"></div>
           </div>
- 
+
           <div id="imagePickerBlock" class="hidden">
             <div class="flex items-center gap-4">
               <div id="imagePreviewWrap" class="w-16 h-16 rounded-full bg-paperDark border border-line flex items-center justify-center overflow-hidden shrink-0">
@@ -241,13 +255,13 @@
             </div>
           </div>
         </div>
- 
+
         <!-- Скрытые служебные поля -->
         <input type="hidden" id="lessonIdInput" />
         <input type="hidden" id="colorValueInput" />
         <input type="hidden" id="iconTypeInput" value="icon" />
         <input type="hidden" id="iconValueInput" />
- 
+
         <div class="flex gap-3 pt-2">
           <button type="submit" class="flex-1 bg-accent hover:bg-accentDark text-white font-medium py-2.5 rounded-xl transition-colors">Сохранить</button>
           <button type="button" id="cancelModalBtn" class="px-5 py-2.5 rounded-xl border border-line text-inkSoft hover:bg-paperDark transition-colors">Отмена</button>
@@ -255,10 +269,58 @@
       </form>
     </div>
   </div>
- 
+
+  <!-- ============== МОДАЛЬНОЕ ОКНО: ДОБАВИТЬ НЕСКОЛЬКО УРОКОВ СРАЗУ ============== -->
+  <div id="bulkModalOverlay" class="fixed inset-0 bg-ink/40 backdrop-blur-[2px] hidden items-center justify-center z-50 p-4">
+    <div class="modal-panel bg-paper w-full max-w-lg rounded-2xl shadow-xl border border-line max-h-[90vh] overflow-y-auto overscroll-contain safe-bottom">
+      <div class="sm:hidden mx-auto mt-2.5 mb-1 h-1.5 w-10 rounded-full bg-line"></div>
+      <div class="p-5 sm:p-6 flex flex-col gap-5">
+
+        <div class="flex items-center justify-between">
+          <h2 class="font-display text-2xl font-semibold">Несколько уроков сразу</h2>
+          <button type="button" id="closeBulkModalBtn" class="text-inkSoft hover:text-ink p-1 rounded-full">
+            <i data-lucide="x" class="w-5 h-5"></i>
+          </button>
+        </div>
+
+        <!-- День -->
+        <div>
+          <label for="bulkDayInput" class="block text-sm font-medium text-inkSoft mb-1.5">День</label>
+          <select id="bulkDayInput" class="w-full bg-white border border-line rounded-xl px-3 py-2.5 text-ink"></select>
+        </div>
+
+        <!-- Предметы: тап в нужном порядке -->
+        <div>
+          <label class="block text-sm font-medium text-inkSoft mb-2">Нажимайте на предметы в том порядке, в котором они идут</label>
+          <div id="bulkSubjectGrid" class="flex flex-wrap gap-2"></div>
+        </div>
+
+        <!-- Собранная последовательность -->
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <label class="text-sm font-medium text-inkSoft">Порядок уроков (<span id="bulkCount">0</span>)</label>
+            <button type="button" id="bulkClearBtn" class="text-xs text-inkSoft hover:text-warm transition-colors">Очистить</button>
+          </div>
+          <div id="bulkSequenceList" class="flex flex-col gap-1.5"></div>
+          <p id="bulkEmptyHint" class="text-sm text-inkSoft/70">Пока ничего не выбрано — нажмите на предметы выше</p>
+        </div>
+
+        <p class="text-xs text-inkSoft -mt-2">
+          Между уроками сразу поставится перемена 5 минут — время начала посчитается автоматически, а перемену для каждого урока потом можно изменить отдельно.
+        </p>
+
+        <div class="flex gap-3 pt-1">
+          <button type="button" id="bulkSubmitBtn" disabled
+            class="flex-1 bg-accent hover:bg-accentDark text-white font-medium py-2.5 rounded-xl transition-colors disabled:opacity-40 disabled:pointer-events-none">Добавить уроки</button>
+          <button type="button" id="bulkCancelBtn" class="px-5 py-2.5 rounded-xl border border-line text-inkSoft hover:bg-paperDark transition-colors">Отмена</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- ============== УВЕДОМЛЕНИЯ (TOAST) ============== -->
   <div id="toast" class="fixed bottom-5 left-1/2 -translate-x-1/2 bg-ink text-white text-sm px-4 py-2.5 rounded-full shadow-lg opacity-0 pointer-events-none transition-opacity duration-300 z-[60] flex items-center gap-2"></div>
- 
+
 <script>
 /* =========================================================================
    РАСПИСАНИЕ ЗАНЯТИЙ — вся логика приложения
@@ -266,19 +328,19 @@
      - Текстовые данные уроков -> localStorage (ключ SCHEDULE_STORAGE_KEY)
      - Загруженные пользователем изображения -> IndexedDB (база SCHEDULE_DB_NAME)
    ========================================================================= */
- 
+
 // ---------- КОНСТАНТЫ ----------
 const SCHEDULE_STORAGE_KEY = 'scheduleApp.lessons.v1';
 const DAY_START_STORAGE_KEY = 'scheduleApp.dayStart.v1';
 const DB_NAME = 'ScheduleAppDB';
 const DB_STORE = 'images';
 const MAX_IMAGE_BYTES = 1.5 * 1024 * 1024; // 1.5 МБ — лимит на загружаемую картинку
- 
+
 const DEFAULT_DAY_START = '08:00'; // время начала первого урока по умолчанию
 const LESSON_DURATION_MIN = 45;    // стандартная длительность урока, минут
 const SHORT_LESSON_SUBJECT = 'Классный час';
 const SHORT_LESSON_DURATION_MIN = 30; // классный час идёт 30 минут
- 
+
 // Список предметов — выпадающий список вместо свободного ввода
 const SUBJECTS = [
   'География', 'Биология', 'Информатика', 'История Казахстана', 'Казахский язык',
@@ -286,10 +348,10 @@ const SUBJECTS = [
   'НВП', 'Всемирная история', 'Химия', 'Основы права', 'Геометрия',
   'Русская литература', 'Физика',
 ];
- 
+
 // Варианты перемены после урока, минут
 const BREAK_PRESETS = [0, 5, 10, 15, 20, 30];
- 
+
 const DAYS = [
   { key: 'mon', short: 'Пн', full: 'Понедельник' },
   { key: 'tue', short: 'Вт', full: 'Вторник' },
@@ -299,7 +361,7 @@ const DAYS = [
   { key: 'sat', short: 'Сб', full: 'Суббота' },
   { key: 'sun', short: 'Вс', full: 'Воскресенье' },
 ];
- 
+
 // Пресеты цветов карточек — фирменные "маркерные" оттенки
 const COLOR_PRESETS = [
   '#2F6F4E', // хвойный зелёный
@@ -311,14 +373,40 @@ const COLOR_PRESETS = [
   '#7A8B3F', // оливковый
   '#46546B', // грифельный
 ];
- 
+
 // Набор иконок Lucide, уместных для школьных предметов
 const ICON_PRESETS = [
   'book-open', 'calculator', 'flask-conical', 'globe', 'music', 'palette',
   'code-2', 'dumbbell', 'languages', 'atom', 'pencil-ruler', 'graduation-cap',
-  'microscope', 'brain', 'compass', 'piano',
+  'microscope', 'brain', 'compass', 'piano', 'users', 'shield', 'scale',
 ];
- 
+
+// Перемена по умолчанию — и для одиночного добавления, и для массового
+const DEFAULT_BREAK_AFTER_MIN = 5;
+
+// Подсказка с иконкой по умолчанию для каждого предмета — используется при
+// массовом добавлении, чтобы уроки сразу выглядели узнаваемо, не заставляя
+// выбирать иконку для каждого урока вручную.
+const SUBJECT_ICON_MAP = {
+  'География': 'globe',
+  'Биология': 'microscope',
+  'Информатика': 'code-2',
+  'История Казахстана': 'book-open',
+  'Казахский язык': 'languages',
+  'Физкультура': 'dumbbell',
+  [SHORT_LESSON_SUBJECT]: 'users',
+  'Алгебра': 'calculator',
+  'Русский язык': 'languages',
+  'Английский язык': 'languages',
+  'НВП': 'shield',
+  'Всемирная история': 'globe',
+  'Химия': 'flask-conical',
+  'Основы права': 'scale',
+  'Геометрия': 'pencil-ruler',
+  'Русская литература': 'book-open',
+  'Физика': 'atom',
+};
+
 // ---------- СОСТОЯНИЕ ПРИЛОЖЕНИЯ ----------
 let lessons = [];             // массив всех уроков
 let currentDay = DAYS[0].key; // текущий выбранный день
@@ -329,7 +417,8 @@ let selectedIconValue = ICON_PRESETS[0];
 let pendingImageDataUrl = null; // base64-строка выбранной, но ещё не сохранённой картинки
 let toastTimeout = null;
 let dayStarts = {}; // { mon: '08:00', tue: '08:00', ... } — время начала первого урока по дням
- 
+let bulkSequence = []; // массив названий предметов в порядке, выбранном в модалке массового добавления
+
 // =========================================================================
 // IndexedDB: хранение изображений (аватарок уроков)
 // =========================================================================
@@ -346,7 +435,7 @@ function openImageDB() {
     request.onerror = () => reject(request.error);
   });
 }
- 
+
 async function saveImageToDB(id, dataUrl) {
   const db = await openImageDB();
   return new Promise((resolve, reject) => {
@@ -356,7 +445,7 @@ async function saveImageToDB(id, dataUrl) {
     tx.onerror = () => reject(tx.error);
   });
 }
- 
+
 async function getImageFromDB(id) {
   const db = await openImageDB();
   return new Promise((resolve, reject) => {
@@ -366,7 +455,7 @@ async function getImageFromDB(id) {
     req.onerror = () => reject(req.error);
   });
 }
- 
+
 async function deleteImageFromDB(id) {
   try {
     const db = await openImageDB();
@@ -380,7 +469,7 @@ async function deleteImageFromDB(id) {
     console.warn('Не удалось удалить изображение из IndexedDB', e);
   }
 }
- 
+
 // Кэш уже загруженных из IndexedDB картинок, чтобы не дёргать базу на каждый рендер
 const imageCache = new Map();
 async function getImageCached(id) {
@@ -394,7 +483,7 @@ async function getImageCached(id) {
     return null;
   }
 }
- 
+
 // =========================================================================
 // localStorage: хранение текстовых данных уроков
 // =========================================================================
@@ -411,7 +500,7 @@ function loadLessons() {
     return [];
   }
 }
- 
+
 // Приводит уроки, сохранённые старой версией приложения (с ручным временем,
 // без предмета и порядка), к новой модели: subject, order, breakAfter.
 function migrateLessons(rawLessons) {
@@ -420,7 +509,7 @@ function migrateLessons(rawLessons) {
     if (!l || !l.day) return;
     (byDay[l.day] = byDay[l.day] || []).push(l);
   });
- 
+
   Object.keys(byDay).forEach((day) => {
     byDay[day]
       .sort((a, b) => {
@@ -430,15 +519,15 @@ function migrateLessons(rawLessons) {
       .forEach((l, idx) => {
         l.order = idx;
         if (!l.subject || !SUBJECTS.includes(l.subject)) l.subject = SUBJECTS[0];
-        if (typeof l.breakAfter !== 'number') l.breakAfter = 10;
+        if (typeof l.breakAfter !== 'number') l.breakAfter = DEFAULT_BREAK_AFTER_MIN;
         delete l.startTime; // теперь время всегда вычисляется, а не хранится
         delete l.endTime;
       });
   });
- 
+
   return rawLessons;
 }
- 
+
 function saveLessons() {
   try {
     localStorage.setItem(SCHEDULE_STORAGE_KEY, JSON.stringify(lessons));
@@ -447,7 +536,7 @@ function saveLessons() {
     showToast('Не удалось сохранить изменения. Возможно, закончилось место в браузере', 'error');
   }
 }
- 
+
 // ---------- Время начала первого урока по дням ----------
 function loadDayStarts() {
   try {
@@ -459,7 +548,7 @@ function loadDayStarts() {
     return {};
   }
 }
- 
+
 function saveDayStarts() {
   try {
     localStorage.setItem(DAY_START_STORAGE_KEY, JSON.stringify(dayStarts));
@@ -468,34 +557,34 @@ function saveDayStarts() {
     showToast('Не удалось сохранить время начала уроков', 'error');
   }
 }
- 
+
 // ---------- Расчёт расписания дня ----------
 // Длительность урока: 45 минут, кроме классного часа — 30 минут.
 function getLessonDuration(subject) {
   return subject === SHORT_LESSON_SUBJECT ? SHORT_LESSON_DURATION_MIN : LESSON_DURATION_MIN;
 }
- 
+
 function timeToMinutes(time) {
   const [h, m] = (time || DEFAULT_DAY_START).split(':').map(Number);
   return h * 60 + m;
 }
- 
+
 function minutesToTime(mins) {
   const normalized = ((mins % 1440) + 1440) % 1440;
   const h = String(Math.floor(normalized / 60)).padStart(2, '0');
   const m = String(normalized % 60).padStart(2, '0');
   return `${h}:${m}`;
 }
- 
+
 // Возвращает уроки дня, отсортированные по порядку, с вычисленными startTime/endTime.
 // Именно так реализовано требование "указываешь время первого урока — остальное считается само".
 function computeScheduleForDay(dayKey) {
   const dayLessons = lessons
     .filter((l) => l.day === dayKey)
     .sort((a, b) => a.order - b.order);
- 
+
   let cursor = timeToMinutes(dayStarts[dayKey] || DEFAULT_DAY_START);
- 
+
   return dayLessons.map((lesson) => {
     const duration = getLessonDuration(lesson.subject);
     const startTime = minutesToTime(cursor);
@@ -504,7 +593,7 @@ function computeScheduleForDay(dayKey) {
     return { ...lesson, startTime, endTime };
   });
 }
- 
+
 // Пересчитывает order (0,1,2...) для всех уроков дня — вызывается после удаления
 // или переноса урока в другой день, чтобы не оставалось "дыр" в порядке.
 function renumberDay(dayKey) {
@@ -513,26 +602,26 @@ function renumberDay(dayKey) {
     .sort((a, b) => a.order - b.order)
     .forEach((l, idx) => { l.order = idx; });
 }
- 
+
 // Меняет местами порядок урока с соседним (для кнопок "вверх"/"вниз" на карточке)
 function moveLesson(id, direction) {
   const lesson = lessons.find((l) => l.id === id);
   if (!lesson) return;
- 
+
   const dayLessons = lessons.filter((l) => l.day === lesson.day).sort((a, b) => a.order - b.order);
   const idx = dayLessons.findIndex((l) => l.id === id);
   const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
   if (swapIdx < 0 || swapIdx >= dayLessons.length) return;
- 
+
   const other = dayLessons[swapIdx];
   const tmp = lesson.order;
   lesson.order = other.order;
   other.order = tmp;
- 
+
   saveLessons();
   renderLessons();
 }
- 
+
 // =========================================================================
 // УВЕДОМЛЕНИЯ (toast)
 // =========================================================================
@@ -540,36 +629,36 @@ function showToast(message, type = 'info') {
   const toast = document.getElementById('toast');
   clearTimeout(toastTimeout);
   toast.innerHTML = '';
- 
+
   const icon = document.createElement('i');
   icon.setAttribute('data-lucide', type === 'error' ? 'alert-triangle' : 'check-circle-2');
   icon.className = 'w-4 h-4 shrink-0';
   const text = document.createElement('span');
   text.textContent = message;
- 
+
   toast.appendChild(icon);
   toast.appendChild(text);
   toast.classList.remove('opacity-0');
   toast.classList.add('opacity-100');
   lucide.createIcons();
- 
+
   toastTimeout = setTimeout(() => {
     toast.classList.remove('opacity-100');
     toast.classList.add('opacity-0');
   }, 3200);
 }
- 
+
 // =========================================================================
 // РЕНДЕР: вкладки дней недели
 // =========================================================================
 function renderDayTabs() {
   const container = document.getElementById('dayTabs');
   container.innerHTML = '';
- 
+
   DAYS.forEach((day) => {
     const count = lessons.filter((l) => l.day === day.key).length;
     const isActive = day.key === currentDay;
- 
+
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.dataset.active = String(isActive);
@@ -592,22 +681,22 @@ function renderDayTabs() {
     container.appendChild(btn);
   });
 }
- 
+
 // Обновляет значение поля "1-й урок начинается в" под выбранный день
 function renderDayStartInput() {
   const input = document.getElementById('dayStartInput');
   input.value = dayStarts[currentDay] || DEFAULT_DAY_START;
 }
- 
+
 // =========================================================================
 // РЕНДЕР: список уроков выбранного дня
 // =========================================================================
 async function renderLessons() {
   const container = document.getElementById('lessonsContainer');
   container.innerHTML = '';
- 
+
   const dayLessons = computeScheduleForDay(currentDay); // время считается от "1-го урока" дня
- 
+
   if (dayLessons.length === 0) {
     container.innerHTML = `
       <div class="flex flex-col items-center justify-center text-center py-16 px-6 bg-white/60 border border-dashed border-line rounded-2xl">
@@ -622,11 +711,11 @@ async function renderLessons() {
     lucide.createIcons();
     return;
   }
- 
+
   for (let i = 0; i < dayLessons.length; i++) {
     const lesson = dayLessons[i];
     container.appendChild(await buildLessonCard(lesson, i === 0, i === dayLessons.length - 1));
- 
+
     // Между уроками показываем перемену как тонкую вставку — не для последнего урока
     if (lesson.breakAfter > 0 && i < dayLessons.length - 1) {
       const divider = document.createElement('div');
@@ -641,11 +730,11 @@ async function renderLessons() {
   }
   lucide.createIcons();
 }
- 
+
 async function buildLessonCard(lesson, isFirst, isLast) {
   const card = document.createElement('div');
   card.className = 'card-anim flex items-stretch gap-2.5 sm:gap-3 bg-white rounded-2xl border border-line pl-3.5 pr-1.5 sm:pr-2 py-3 shadow-sm';
- 
+
   // ---- Колонка времени: начало сверху крупно, конец снизу мельче и серым ----
   // Это главное, что должно быть видно с первого взгляда на телефоне.
   const timeCol = document.createElement('div');
@@ -655,17 +744,17 @@ async function buildLessonCard(lesson, isFirst, isLast) {
     <span class="font-mono text-xs text-inkSoft leading-none">${lesson.endTime}</span>
   `;
   card.appendChild(timeCol);
- 
+
   // ---- Цветная вертикальная полоса — фирменный акцент, теперь во всю высоту строки ----
   const bar = document.createElement('div');
   bar.className = 'w-1 rounded-full shrink-0';
   bar.style.backgroundColor = lesson.color;
   card.appendChild(bar);
- 
+
   // ---- Аватар: lucide-иконка на цветном фоне, либо загруженное изображение ----
   const avatarWrap = document.createElement('div');
   avatarWrap.className = 'w-9 h-9 rounded-full flex items-center justify-center shrink-0 overflow-hidden border border-line self-center';
- 
+
   if (lesson.iconType === 'image' && lesson.iconValue) {
     const dataUrl = await getImageCached(lesson.iconValue);
     if (dataUrl) {
@@ -682,7 +771,7 @@ async function buildLessonCard(lesson, isFirst, isLast) {
     avatarWrap.style.backgroundColor = lesson.color + '22';
     avatarWrap.innerHTML = `<i data-lucide="${lesson.iconValue || 'book-open'}" class="w-4 h-4" style="color:${lesson.color}"></i>`;
   }
- 
+
   // ---- Основной блок: предмет, преподаватель, комментарий — вся строка кликабельна для редактирования ----
   const mainBtn = document.createElement('button');
   mainBtn.type = 'button';
@@ -699,7 +788,7 @@ async function buildLessonCard(lesson, isFirst, isLast) {
     </div>
   `;
   card.appendChild(mainBtn);
- 
+
   // ---- Компактные контролы: порядок (вверх/вниз) и удаление ----
   const controls = document.createElement('div');
   controls.className = 'flex items-center shrink-0 pl-1 border-l border-line ml-0.5';
@@ -717,48 +806,48 @@ async function buildLessonCard(lesson, isFirst, isLast) {
     </button>
   `;
   card.appendChild(controls);
- 
+
   mainBtn.addEventListener('click', () => openModal(lesson));
   controls.querySelector('.moveUpBtn').addEventListener('click', () => moveLesson(lesson.id, 'up'));
   controls.querySelector('.moveDownBtn').addEventListener('click', () => moveLesson(lesson.id, 'down'));
   controls.querySelector('.deleteBtn').addEventListener('click', () => handleDeleteLesson(lesson.id));
- 
+
   return card;
 }
- 
+
 // Простая защита от XSS при выводе имени преподавателя
 function escapeHtml(str) {
   const div = document.createElement('div');
   div.textContent = str;
   return div.innerHTML;
 }
- 
+
 // =========================================================================
 // УДАЛЕНИЕ УРОКА
 // =========================================================================
 async function handleDeleteLesson(id) {
   const lesson = lessons.find((l) => l.id === id);
   if (!lesson) return;
- 
+
   const ok = confirm(`Удалить урок «${lesson.subject}»?`);
   if (!ok) return;
- 
+
   // Если у урока была загруженная картинка — чистим её из IndexedDB, чтобы не копить мусор
   if (lesson.iconType === 'image' && lesson.iconValue) {
     await deleteImageFromDB(lesson.iconValue);
     imageCache.delete(lesson.iconValue);
   }
- 
+
   const day = lesson.day;
   lessons = lessons.filter((l) => l.id !== id);
   renumberDay(day); // закрываем "дыру" в порядке уроков, оставшихся в этот день
- 
+
   saveLessons();
   renderDayTabs();
   renderLessons();
   showToast('Урок удалён');
 }
- 
+
 // =========================================================================
 // МОДАЛЬНОЕ ОКНО: открытие / закрытие / заполнение палитр
 // =========================================================================
@@ -766,17 +855,123 @@ function populateDaySelect() {
   const select = document.getElementById('dayInput');
   select.innerHTML = DAYS.map((d) => `<option value="${d.key}">${d.full}</option>`).join('');
 }
- 
+
 function populateSubjectSelect() {
   const select = document.getElementById('subjectInput');
   select.innerHTML = SUBJECTS.map((s) => `<option value="${s}">${s}${s === SHORT_LESSON_SUBJECT ? ' (30 мин)' : ''}</option>`).join('');
 }
- 
+
 function populateBreakSelect() {
   const select = document.getElementById('breakAfterInput');
   select.innerHTML = BREAK_PRESETS.map((min) => `<option value="${min}">${min === 0 ? 'Без перемены' : min + ' мин'}</option>`).join('');
 }
- 
+
+// =========================================================================
+// МАССОВОЕ ДОБАВЛЕНИЕ НЕСКОЛЬКИХ УРОКОВ ЗА ОДИН РАЗ
+// =========================================================================
+function populateBulkDaySelect() {
+  const select = document.getElementById('bulkDayInput');
+  select.innerHTML = DAYS.map((d) => `<option value="${d.key}">${d.full}</option>`).join('');
+}
+
+// Плитки предметов: каждый клик добавляет предмет в конец последовательности —
+// один и тот же предмет можно нажать несколько раз (например, два урока литературы подряд).
+function populateBulkSubjectGrid() {
+  const grid = document.getElementById('bulkSubjectGrid');
+  grid.innerHTML = '';
+  SUBJECTS.forEach((subject) => {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'px-3 py-1.5 rounded-full border border-line bg-white text-sm text-ink hover:bg-paperDark active:scale-95 transition-transform';
+    chip.textContent = subject;
+    chip.addEventListener('click', () => {
+      bulkSequence.push(subject);
+      renderBulkSequence();
+    });
+    grid.appendChild(chip);
+  });
+}
+
+// Отрисовывает уже собранную последовательность уроков с возможностью убрать лишний
+function renderBulkSequence() {
+  const list = document.getElementById('bulkSequenceList');
+  const emptyHint = document.getElementById('bulkEmptyHint');
+  const count = document.getElementById('bulkCount');
+  const submitBtn = document.getElementById('bulkSubmitBtn');
+
+  count.textContent = String(bulkSequence.length);
+  submitBtn.disabled = bulkSequence.length === 0;
+  emptyHint.classList.toggle('hidden', bulkSequence.length > 0);
+
+  list.innerHTML = '';
+  bulkSequence.forEach((subject, idx) => {
+    const row = document.createElement('div');
+    row.className = 'flex items-center gap-2.5 bg-white border border-line rounded-xl px-3 py-2';
+    row.innerHTML = `
+      <span class="font-mono text-xs text-inkSoft w-5 shrink-0">${idx + 1}.</span>
+      <span class="flex-1 text-sm text-ink truncate">${escapeHtml(subject)}</span>
+      <button type="button" class="removeBulkItemBtn p-1.5 rounded-full hover:bg-red-50 text-inkSoft hover:text-red-600 transition-colors" aria-label="Убрать из списка">
+        <i data-lucide="x" class="w-3.5 h-3.5"></i>
+      </button>
+    `;
+    row.querySelector('.removeBulkItemBtn').addEventListener('click', () => {
+      bulkSequence.splice(idx, 1);
+      renderBulkSequence();
+    });
+    list.appendChild(row);
+  });
+  lucide.createIcons();
+}
+
+function openBulkModal() {
+  bulkSequence = [];
+  document.getElementById('bulkDayInput').value = currentDay;
+  renderBulkSequence();
+
+  const overlay = document.getElementById('bulkModalOverlay');
+  overlay.classList.remove('hidden');
+  overlay.classList.add('flex');
+}
+
+function closeBulkModal() {
+  const overlay = document.getElementById('bulkModalOverlay');
+  overlay.classList.add('hidden');
+  overlay.classList.remove('flex');
+}
+
+// Создаёт сразу несколько уроков из собранной последовательности предметов.
+// Каждому назначается перемена по умолчанию (5 минут) и цвет/иконка по кругу —
+// дальше уроки можно открыть по одному и просто подправить перемену или что угодно ещё.
+function handleBulkSubmit() {
+  if (bulkSequence.length === 0) return;
+
+  const day = document.getElementById('bulkDayInput').value;
+  const startOrder = lessons.filter((l) => l.day === day).length;
+
+  bulkSequence.forEach((subject, idx) => {
+    lessons.push({
+      id: 'lesson_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8) + '_' + idx,
+      subject,
+      teacher: '',
+      day,
+      order: startOrder + idx,
+      breakAfter: DEFAULT_BREAK_AFTER_MIN,
+      comment: '',
+      color: COLOR_PRESETS[(startOrder + idx) % COLOR_PRESETS.length],
+      iconType: 'icon',
+      iconValue: SUBJECT_ICON_MAP[subject] || ICON_PRESETS[0],
+    });
+  });
+
+  saveLessons();
+  currentDay = day;
+  closeBulkModal();
+  renderDayTabs();
+  renderDayStartInput();
+  renderLessons();
+  showToast(`Добавлено уроков: ${bulkSequence.length}`);
+}
+
 function populateColorSwatches() {
   const wrap = document.getElementById('colorSwatches');
   wrap.innerHTML = '';
@@ -796,13 +991,13 @@ function populateColorSwatches() {
     wrap.appendChild(btn);
   });
 }
- 
+
 function refreshColorSwatchSelection() {
   document.querySelectorAll('#colorSwatches .swatch').forEach((el) => {
     el.dataset.selected = String(el.dataset.color === selectedColor);
   });
 }
- 
+
 function populateIconGrid() {
   const grid = document.getElementById('iconGrid');
   grid.innerHTML = '';
@@ -824,17 +1019,17 @@ function populateIconGrid() {
   });
   lucide.createIcons();
 }
- 
+
 function refreshIconGridSelection() {
   document.querySelectorAll('#iconGrid .icon-btn').forEach((el) => {
     el.dataset.selected = String(el.dataset.icon === selectedIconValue && selectedIconType === 'icon');
   });
 }
- 
+
 function switchAvatarMode(mode) {
   selectedIconType = mode;
   document.getElementById('iconTypeInput').value = mode;
- 
+
   document.querySelectorAll('.avatar-mode-btn').forEach((btn) => {
     const active = btn.dataset.mode === mode;
     btn.classList.toggle('bg-white', active);
@@ -842,16 +1037,16 @@ function switchAvatarMode(mode) {
     btn.classList.toggle('text-ink', active);
     btn.classList.toggle('text-inkSoft', !active);
   });
- 
+
   document.getElementById('iconPickerBlock').classList.toggle('hidden', mode !== 'icon');
   document.getElementById('imagePickerBlock').classList.toggle('hidden', mode !== 'image');
 }
- 
+
 function openModal(lesson = null) {
   const form = document.getElementById('lessonForm');
   form.reset();
   pendingImageDataUrl = null;
- 
+
   if (lesson) {
     // Режим редактирования — заполняем форму текущими значениями
     editingLessonId = lesson.id;
@@ -862,15 +1057,15 @@ function openModal(lesson = null) {
     document.getElementById('dayInput').value = lesson.day;
     document.getElementById('breakAfterInput').value = String(lesson.breakAfter || 0);
     document.getElementById('commentInput').value = lesson.comment || '';
- 
+
     selectedColor = lesson.color;
     selectedIconType = lesson.iconType;
     selectedIconValue = lesson.iconValue;
- 
+
     document.getElementById('colorValueInput').value = lesson.color;
     document.getElementById('iconTypeInput').value = lesson.iconType;
     document.getElementById('iconValueInput').value = lesson.iconValue;
- 
+
     if (lesson.iconType === 'image') {
       switchAvatarMode('image');
       getImageCached(lesson.iconValue).then((dataUrl) => {
@@ -886,29 +1081,29 @@ function openModal(lesson = null) {
     document.getElementById('lessonIdInput').value = '';
     document.getElementById('subjectInput').value = SUBJECTS[0];
     document.getElementById('dayInput').value = currentDay;
-    document.getElementById('breakAfterInput').value = '10';
- 
+    document.getElementById('breakAfterInput').value = String(DEFAULT_BREAK_AFTER_MIN);
+
     selectedColor = COLOR_PRESETS[0];
     selectedIconType = 'icon';
     selectedIconValue = ICON_PRESETS[0];
- 
+
     document.getElementById('colorValueInput').value = selectedColor;
     document.getElementById('iconTypeInput').value = 'icon';
     document.getElementById('iconValueInput').value = selectedIconValue;
- 
+
     switchAvatarMode('icon');
     setImagePreview(null);
   }
- 
+
   refreshColorSwatchSelection();
   refreshIconGridSelection();
- 
+
   const overlay = document.getElementById('modalOverlay');
   overlay.classList.remove('hidden');
   overlay.classList.add('flex');
   document.getElementById('subjectInput').focus();
 }
- 
+
 function closeModal() {
   const overlay = document.getElementById('modalOverlay');
   overlay.classList.add('hidden');
@@ -916,7 +1111,7 @@ function closeModal() {
   editingLessonId = null;
   pendingImageDataUrl = null;
 }
- 
+
 function setImagePreview(dataUrl) {
   const img = document.getElementById('imagePreview');
   const placeholder = document.getElementById('imagePlaceholderIcon');
@@ -930,23 +1125,23 @@ function setImagePreview(dataUrl) {
     placeholder.classList.remove('hidden');
   }
 }
- 
+
 // =========================================================================
 // ЗАГРУЗКА ИЗОБРАЖЕНИЯ ПОЛЬЗОВАТЕЛЯ
 // =========================================================================
 function handleImageFileSelected(file) {
   if (!file) return;
- 
+
   if (!file.type.startsWith('image/')) {
     showToast('Можно загружать только файлы изображений', 'error');
     return;
   }
- 
+
   if (file.size > MAX_IMAGE_BYTES) {
     showToast('Файл слишком большой. Максимум — 1.5 МБ', 'error');
     return;
   }
- 
+
   const reader = new FileReader();
   reader.onload = () => {
     pendingImageDataUrl = reader.result; // base64 dataURL
@@ -959,29 +1154,29 @@ function handleImageFileSelected(file) {
   };
   reader.readAsDataURL(file);
 }
- 
+
 // =========================================================================
 // СОХРАНЕНИЕ ФОРМЫ (создание / редактирование урока)
 // =========================================================================
 async function handleFormSubmit(e) {
   e.preventDefault();
- 
+
   const subject = document.getElementById('subjectInput').value;
   const teacher = document.getElementById('teacherInput').value.trim();
   const day = document.getElementById('dayInput').value;
   const breakAfter = Number(document.getElementById('breakAfterInput').value) || 0;
   const comment = document.getElementById('commentInput').value.trim();
- 
+
   // ---- Валидация ----
   if (!subject) {
     showToast('Выберите предмет', 'error');
     return;
   }
- 
+
   // ---- Определяем аватар урока ----
   let iconType = selectedIconType;
   let iconValue = selectedIconValue;
- 
+
   if (iconType === 'image') {
     if (pendingImageDataUrl) {
       // Новая картинка — сохраняем в IndexedDB под новым id
@@ -1007,10 +1202,10 @@ async function handleFormSubmit(e) {
       return;
     }
   }
- 
+
   const existingLesson = editingLessonId ? lessons.find((l) => l.id === editingLessonId) : null;
   const dayChanged = existingLesson && existingLesson.day !== day;
- 
+
   // Порядок: при создании или при переносе в другой день урок добавляется в конец дня,
   // при обычном редактировании порядок в рамках дня сохраняется.
   let order;
@@ -1019,7 +1214,7 @@ async function handleFormSubmit(e) {
   } else {
     order = lessons.filter((l) => l.day === day && l.id !== editingLessonId).length;
   }
- 
+
   const lessonData = {
     id: editingLessonId || 'lesson_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
     subject,
@@ -1032,7 +1227,7 @@ async function handleFormSubmit(e) {
     iconType,
     iconValue,
   };
- 
+
   if (editingLessonId) {
     // Если сменили тип аватара с картинки на иконку — чистим старую картинку
     if (existingLesson && existingLesson.iconType === 'image' && (iconType !== 'image' || existingLesson.iconValue !== iconValue)) {
@@ -1046,14 +1241,14 @@ async function handleFormSubmit(e) {
     lessons.push(lessonData);
     showToast('Урок добавлен');
   }
- 
+
   saveLessons();
   currentDay = day; // переключаемся на день добавленного/изменённого урока
   closeModal();
   renderDayTabs();
   renderLessons();
 }
- 
+
 // =========================================================================
 // ИНИЦИАЛИЗАЦИЯ
 // =========================================================================
@@ -1062,31 +1257,46 @@ function attachEventListeners() {
   document.getElementById('mobileAddFab').addEventListener('click', () => openModal());
   document.getElementById('closeModalBtn').addEventListener('click', closeModal);
   document.getElementById('cancelModalBtn').addEventListener('click', closeModal);
- 
+
   // Закрытие модалки по клику на подложку
   document.getElementById('modalOverlay').addEventListener('click', (e) => {
     if (e.target.id === 'modalOverlay') closeModal();
   });
-  // Закрытие по Esc
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && !document.getElementById('modalOverlay').classList.contains('hidden')) {
-      closeModal();
-    }
+
+  // Модалка массового добавления
+  document.getElementById('openBulkModalBtn').addEventListener('click', () => openBulkModal());
+  document.getElementById('openBulkModalBtnMobile').addEventListener('click', () => openBulkModal());
+  document.getElementById('closeBulkModalBtn').addEventListener('click', closeBulkModal);
+  document.getElementById('bulkCancelBtn').addEventListener('click', closeBulkModal);
+  document.getElementById('bulkClearBtn').addEventListener('click', () => {
+    bulkSequence = [];
+    renderBulkSequence();
   });
- 
+  document.getElementById('bulkSubmitBtn').addEventListener('click', handleBulkSubmit);
+  document.getElementById('bulkModalOverlay').addEventListener('click', (e) => {
+    if (e.target.id === 'bulkModalOverlay') closeBulkModal();
+  });
+
+  // Закрытие по Esc — для той модалки, которая сейчас открыта
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    if (!document.getElementById('modalOverlay').classList.contains('hidden')) closeModal();
+    if (!document.getElementById('bulkModalOverlay').classList.contains('hidden')) closeBulkModal();
+  });
+
   document.getElementById('lessonForm').addEventListener('submit', handleFormSubmit);
- 
+
   document.querySelectorAll('.avatar-mode-btn').forEach((btn) => {
     btn.addEventListener('click', () => switchAvatarMode(btn.dataset.mode));
   });
- 
+
   document.getElementById('chooseImageBtn').addEventListener('click', () => {
     document.getElementById('imageFileInput').click();
   });
   document.getElementById('imageFileInput').addEventListener('change', (e) => {
     handleImageFileSelected(e.target.files[0]);
   });
- 
+
   // Изменение времени начала первого урока — пересчитывает всё расписание дня
   document.getElementById('dayStartInput').addEventListener('change', (e) => {
     const value = e.target.value || DEFAULT_DAY_START;
@@ -1095,7 +1305,7 @@ function attachEventListeners() {
     renderLessons();
   });
 }
- 
+
 function init() {
   lessons = loadLessons();
   dayStarts = loadDayStarts();
@@ -1104,15 +1314,16 @@ function init() {
   populateBreakSelect();
   populateColorSwatches();
   populateIconGrid();
+  populateBulkDaySelect();
+  populateBulkSubjectGrid();
   attachEventListeners();
   renderDayTabs();
   renderDayStartInput();
   renderLessons();
   lucide.createIcons();
 }
- 
+
 document.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
 </html>
- 
